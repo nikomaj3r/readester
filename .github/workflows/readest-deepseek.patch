@@ -1,0 +1,55 @@
+diff --git a/apps/readest-app/src/utils/access.ts b/apps/readest-app/src/utils/access.ts
+--- a/apps/readest-app/src/utils/access.ts
++++ b/apps/readest-app/src/utils/access.ts
+@@ -188,15 +188,11 @@
+   isSelfHosted() || customizationPurchased || PREMIUM_PLANS.includes(plan);
+ 
+ /**
+- * Custom translators (the user's own OpenAI-compatible LLM or DeepL key) are a
+- * premium feature. Requests go straight from the device, so this is a
+- * client-side gate, like the TTS cache. It reads the session token directly so
+- * a reader window never sees a premium user as free while the plan loads.
+- */
+-export const isCustomTranslatorAllowed = (token: string | null | undefined): boolean =>
+-  token
+-    ? isCustomizationAllowed(getUserProfilePlan(token), getCustomizationPurchased(token))
+-    : isSelfHosted();
++ * Local build: custom LLM translators call the endpoint configured by the user
++ * and never touch Readest servers, so no account or subscription is required.
++ * Keep the token parameter for existing call sites.
++ */
++export const isCustomTranslatorAllowed = (_token?: string | null): boolean => true;
+ 
+ /**
+  * Custom TTS services (the user's own OpenAI-compatible speech endpoint) are
+diff --git a/apps/readest-app/src/services/translators/custom/index.ts b/apps/readest-app/src/services/translators/custom/index.ts
+--- a/apps/readest-app/src/services/translators/custom/index.ts
++++ b/apps/readest-app/src/services/translators/custom/index.ts
+@@ -15,7 +15,8 @@
+     config.type === 'deepl'
+       ? { ...createDeepLTranslator(config), requiresApp: true }
+       : createOpenAICompatibleTranslator(config);
+-  provider.premiumRequired = true;
++  // Local build: the feature gate is removed in utils/access.ts.
++  provider.premiumRequired = false;
+   // The DeepL API sends no CORS headers, so it only works through tauriFetch.
+   provider.disabled = !!config.disabled || (!!provider.requiresApp && !isTauriAppPlatform());
+   return provider;
+diff --git a/apps/readest-app/src/components/settings/CustomTranslatorEditor.tsx b/apps/readest-app/src/components/settings/CustomTranslatorEditor.tsx
+--- a/apps/readest-app/src/components/settings/CustomTranslatorEditor.tsx
++++ b/apps/readest-app/src/components/settings/CustomTranslatorEditor.tsx
+@@ -55,7 +55,13 @@
+   const _ = useTranslation();
+   const { envConfig } = useEnv();
+   const [draft, setDraft] = useState<Draft>(
+-    translator ?? { type: 'openai-compatible', name: '', baseUrl: BASE_URL_PRESETS[0] },
++    translator ?? {
++      type: 'openai-compatible',
++      name: 'DeepSeek V4.1 Flash',
++      baseUrl: 'https://api.deepseek.com/v1',
++      model: 'deepseek-flash',
++      thinking: 'off',
++    },
+   );
+   const [models, setModels] = useState<string[]>([]);
+   const [fetchingModels, setFetchingModels] = useState(false);
